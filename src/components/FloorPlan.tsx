@@ -7,7 +7,7 @@ import { DashboardVideoPlayer } from './DashboardVideoPlayer';
 
 export const FloorPlan: React.FC = () => {
   const { tables } = useRestaurant();
-  const { isPlaybackView, isPlaying, currentTime, play, pause, seek } = usePlayback();
+  const { isPlaybackView, isPlaying, currentTime } = usePlayback();
   
   const [isMinimized, setIsMinimized] = useState(() => {
     const saved = localStorage.getItem('floorPlanMinimized');
@@ -15,7 +15,6 @@ export const FloorPlan: React.FC = () => {
   });
 
   const [activeView, setActiveView] = useState<'grid' | 'map'>('grid');
-  const [videoError, setVideoError] = useState<string | null>(null);
 
   // Auto-switch to map view if playback mode is active
   useEffect(() => {
@@ -23,11 +22,6 @@ export const FloorPlan: React.FC = () => {
       setActiveView('map');
     }
   }, [isPlaybackView]);
-
-  const handleVideoError = (error: string) => {
-    console.error('Floor Plan Video Error:', error);
-    setVideoError(error);
-  };
 
   useEffect(() => {
     localStorage.setItem('floorPlanMinimized', JSON.stringify(isMinimized));
@@ -139,51 +133,21 @@ export const FloorPlan: React.FC = () => {
              <OperationalGrid />
            </div>
          ) : (
-            <div className="h-[60vh] w-full bg-gray-100 relative flex-shrink-0 group/map">
-               {/* Main Floor Plan Video */}
-               {videoError ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 text-gray-500 p-8 text-center">
-                    <div className="w-16 h-16 border-4 border-gray-300 border-dashed rounded-lg mb-4 flex items-center justify-center">
-                      <Map className="text-gray-400 w-8 h-8" />
-                    </div>
-                    <p className="font-medium text-gray-700">Floor Plan Visualization Unavailable</p>
-                    <p className="text-sm mt-2 max-w-md">{videoError}</p>
-                    <p className="text-xs mt-4 text-gray-400">Falling back to static map view...</p>
-                  </div>
-               ) : (
-                 <>
-                   <div className="w-full h-full relative" onClick={(e) => {
-                     // Simple click-to-fullscreen handler
-                     const target = e.currentTarget;
-                     if (document.fullscreenElement) {
-                       document.exitFullscreen();
-                     } else {
-                       target.requestFullscreen().catch(err => console.error("Error attempting to enable fullscreen:", err));
-                     }
-                   }}>
-                     <DashboardVideoPlayer 
-                        src="/simulation video.mov"
-                        showControls={false}
-                        autoPlay={true}
-                        loop={true}
-                        muted={true}
-                        objectFit="cover"
-                        className="w-full h-full"
-                        isPlaying={isPlaying}
-                        currentTime={currentTime / 1000}
-                        onPlay={play}
-                        onPause={pause}
-                        onSeek={(t) => seek(t * 1000)}
-                        onError={handleVideoError}
-                     />
-                     
-                   </div>
-
-                   <div className="absolute top-4 left-4 bg-white/80 backdrop-blur px-3 py-1 rounded text-xs font-semibold text-gray-700 pointer-events-none">
-                      Floor Plan Feed
-                   </div>
-                 </>
-               )}
+            <div className="h-[60vh] w-full bg-gray-100 relative flex-shrink-0">
+               <DashboardVideoPlayer 
+                  src="/simulation video mp4.mp4"
+                  showControls={false}
+                  autoPlay={true}
+                  loop={true}
+                  muted={true}
+                  objectFit="cover"
+                  className="w-full h-full"
+                  isPlaying={isPlaying}
+                  currentTime={currentTime / 1000}
+               />
+               <div className="absolute top-4 left-4 bg-white/80 backdrop-blur px-3 py-1 rounded text-xs font-semibold text-gray-700 pointer-events-none">
+                  Floor Plan Feed
+               </div>
             </div>
           )}
       </div>

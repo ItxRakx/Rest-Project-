@@ -13,7 +13,6 @@ interface PlaybackContextType {
   pause: () => void;
   seek: (time: number) => void;
   setSpeed: (speed: number) => void;
-  setDuration: (duration: number) => void;
   currentFrame: PlaybackFrame | null;
 }
 
@@ -24,7 +23,7 @@ export const PlaybackProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [duration, setDuration] = useState(60000); // Default 60 seconds, will be updated by players
+  const duration = 60000; // 60 seconds from mock data
   const animationFrameRef = useRef<number>();
   const lastTimeRef = useRef<number>(0);
 
@@ -39,7 +38,8 @@ export const PlaybackProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setCurrentTime(prev => {
         const nextTime = prev + delta * playbackSpeed;
         if (nextTime >= duration) {
-          return 0; // Loop back to start instead of pausing
+          setIsPlaying(false);
+          return duration;
         }
         return nextTime;
       });
@@ -84,7 +84,6 @@ export const PlaybackProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       pause,
       seek,
       setSpeed,
-      setDuration,
       currentFrame
     }}>
       {children}
