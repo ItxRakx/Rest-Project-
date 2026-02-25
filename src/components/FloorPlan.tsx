@@ -135,7 +135,7 @@ export const FloorPlan: React.FC = () => {
          ) : (
             <div className="h-[60vh] w-full bg-gray-100 relative flex-shrink-0">
                <DashboardVideoPlayer 
-                  src="/simulation video mp4.mp4"
+                  src="/simulation.mp4"
                   showControls={false}
                   autoPlay={true}
                   loop={true}
