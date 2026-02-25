@@ -45,7 +45,7 @@ export const FloorPlan: React.FC = () => {
               {tables.length} Tables {isMinimized ? '• Summary View' : (activeView === 'grid' ? '• Operational Grid' : '')}
             </p>
           </div>
-          
+    
           <div className="flex gap-4 text-xs items-center">
              {!isMinimized && (
                  <div className="flex bg-gray-100 p-1 rounded-lg mr-4">
