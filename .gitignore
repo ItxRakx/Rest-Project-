@@ -25,3 +25,5 @@ dist-ssr
 # Large video assets should not be committed to git (GitHub 100MB limit)
 public/*.mp4
 public/*.mov
+
+.vercel

@@ -46,6 +46,7 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(muted);
 
   // Sync state with props
   useEffect(() => {
@@ -63,18 +64,43 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
       }
     }
   }, [propsCurrentTime]);
-  const [isMuted, setIsMuted] = useState(muted);
-  const [isLoading, setIsLoading] = useState(!autoPlay);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isBuffering, setIsBuffering] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const lastSrcRef = useRef(src);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Initialize source on mount
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video && src) {
+      setIsLoading(true);
+      setIsReady(false);
+      video.src = src;
+      video.load();
+    }
+  }, []);
 
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.defaultMuted = muted;
     }
   }, []);
+
+  // Early Preload / Pre-warm
+  useEffect(() => {
+    if (src && !isReady) {
+      const link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'video';
+      link.href = src;
+      document.head.appendChild(link);
+      return () => {
+        document.head.removeChild(link);
+      };
+    }
+  }, [src, isReady]);
 
   // Performance Optimization: Pre-warm the video source with better state management
   useEffect(() => {
@@ -99,27 +125,28 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
         setIsLoading(true);
       }
       setIsBuffering(true);
+      setIsReady(false);
       
       // Set a safety timeout to prevent infinite loading
       loadingTimeoutRef.current = setTimeout(() => {
-        if (isLoading || isBuffering) {
+        if (!isReady) {
           console.warn(`[VideoPlayer] Loading timeout for ${src} - forcing ready state`);
           setIsLoading(false);
           setIsBuffering(false);
+          setIsReady(true);
         }
-      }, 10000); // 10 second safety timeout
+      }, 7000); // 7 second safety timeout as requested (5-8s)
       
       // Re-assign src and load new video
       video.src = src;
-      // Use faster loading strategy
+      // Explicitly call load() to start buffering immediately
       video.load();
       
-      // Optimization: Try to play immediately if browser allows, instead of waiting for full canplay
+      // Optimization: Try to play immediately if browser allows
       if (isPlaying || autoPlay) {
         const playPromise = video.play();
         if (playPromise !== undefined) {
           playPromise.catch(() => {
-            // If immediate play fails, we fall back to the canplay listener
             console.log(`[VideoPlayer] Initial play prevented for ${src}, waiting for buffer...`);
           });
         }
@@ -135,6 +162,7 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
 
         setIsLoading(false);
         setIsBuffering(false);
+        setIsReady(true);
         
         if (isPlaying || autoPlay) {
           // Check if already playing from the immediate attempt above
@@ -164,13 +192,11 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
 
     const handleTimeUpdate = () => {
       setCurrentTime(video.currentTime);
-      // Only trigger seek if the difference is significant to avoid loops
-      // We don't bubble up every time update, usually handled by parent context if driven by it
     };
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
       if (onDurationChange) onDurationChange(video.duration);
-      setIsLoading(false);
+      // Don't set isLoading(false) here, wait for canplay
     };
     const handleEnded = () => {
       setIsPlaying(false);
@@ -202,13 +228,31 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
       setIsLoading(false);
       if (onError) onError(errMessage);
     };
-    const handleWaiting = () => setIsLoading(true);
-    const handleCanPlay = () => setIsLoading(false);
+    const handleWaiting = () => {
+      // Only set buffering if it's not the initial load
+      if (!isLoading) {
+        setIsBuffering(true);
+      }
+    };
+    const handleCanPlay = () => {
+      console.log('[VideoPlayer] canplay event received');
+      setIsLoading(false);
+      setIsBuffering(false);
+      setIsReady(true);
+    };
+    const handlePlaying = () => {
+      console.log('[VideoPlayer] playing event received');
+      setIsLoading(false);
+      setIsBuffering(false);
+      setIsReady(true);
+    };
     const handleStalled = () => {
       console.warn('Video stalled, attempting to recover...');
       if (videoRef.current && isPlaying) {
-        videoRef.current.load();
-        videoRef.current.play().catch(e => console.warn('Recovery play failed:', e));
+        // Instead of full load(), just try to play again or wait for buffer
+        videoRef.current.play().catch(() => {
+          videoRef.current?.load();
+        });
       }
     };
 
@@ -218,6 +262,7 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
     video.addEventListener('error', handleError);
     video.addEventListener('waiting', handleWaiting);
     video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('playing', handlePlaying);
     video.addEventListener('stalled', handleStalled);
 
     return () => {
@@ -227,6 +272,7 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
       video.removeEventListener('error', handleError);
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('stalled', handleStalled);
     };
   }, [onError, isPlaying]);
@@ -234,14 +280,19 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
   useEffect(() => {
     if (videoRef.current && !isLoading && !isBuffering) {
       if (isPlaying) {
-        videoRef.current.play().catch(e => {
-          if (e.name !== 'AbortError') {
-            console.warn('[VideoPlayer] Playback failed:', e);
-            setIsPlaying(false);
-          }
-        });
+        // Only call play if the video is actually paused
+        if (videoRef.current.paused) {
+          videoRef.current.play().catch(e => {
+            if (e.name !== 'AbortError') {
+              console.warn('[VideoPlayer] Playback failed:', e);
+              setIsPlaying(false);
+            }
+          });
+        }
       } else {
-        videoRef.current.pause();
+        if (!videoRef.current.paused) {
+          videoRef.current.pause();
+        }
       }
     }
   }, [isPlaying, isLoading, isBuffering]);
@@ -306,6 +357,17 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
         </div>
       ) : (
         <>
+          {/* Skeleton Loader */}
+          {!isReady && !error && (
+            <div className="absolute inset-0 bg-gray-900 animate-pulse flex items-center justify-center z-10">
+              <div className="w-full h-full bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 bg-[length:200%_100%] animate-shimmer opacity-50"></div>
+              <div className="absolute flex flex-col items-center">
+                <Loader2 className="w-10 h-10 text-blue-500/50 animate-spin mb-2" />
+                <span className="text-xs text-gray-500 font-medium">Initializing Feed...</span>
+              </div>
+            </div>
+          )}
+
           <video
             ref={videoRef}
             src={src}
