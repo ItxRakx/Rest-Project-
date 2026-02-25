@@ -244,7 +244,6 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
         <>
           <video
             ref={videoRef}
-            src={src}
             poster={poster}
             className={`w-full h-full object-${objectFit}`}
             playsInline
@@ -253,7 +252,10 @@ export const DashboardVideoPlayer: React.FC<DashboardVideoPlayerProps> = ({
             autoPlay={autoPlay}
             preload={preload}
             aria-label="Video Player"
-          />
+          >
+            {src && <source src={src} type="video/mp4" />}
+            Your browser does not support the video tag.
+          </video>
 
           {(isLoading || isBuffering) && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
